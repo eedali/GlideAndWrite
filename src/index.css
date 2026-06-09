@@ -5,13 +5,69 @@
   --font-sans: "SF Pro Display", "Geist Sans", "Helvetica Neue", "Switzer", system-ui, sans-serif;
   --font-serif: "Newsreader", ui-serif, Georgia, serif;
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", monospace;
+  
+  --color-canvas: #F7F6F3;
+  --color-entry: #FDF0F0;
+  --color-surface: #FFFFFF;
+  --color-border: #EAEAEA;
+  --color-text: #111111;
+  --color-muted: #787774;
+}
+
+.theme-bone {
+  --color-canvas: #F7F6F3;
+  --color-entry: #FDF0F0;
+  --color-surface: #FFFFFF;
+  --color-border: #EAEAEA;
+  --color-text: #111111;
+  --color-muted: #787774;
+}
+.theme-charcoal {
+  --color-canvas: #111111;
+  --color-entry: #1F1414;
+  --color-surface: #1E1E1E;
+  --color-border: #333333;
+  --color-text: #EDEDED;
+  --color-muted: #A3A3A3;
+}
+.theme-oatmeal {
+  --color-canvas: #F9F8F6;
+  --color-entry: #FAEBEB;
+  --color-surface: #F4F2EC;
+  --color-border: #E8E4D9;
+  --color-text: #2C2825;
+  --color-muted: #8C867B;
+}
+.theme-slate {
+  --color-canvas: #E2E8F0;
+  --color-entry: #D8E0EB;
+  --color-surface: #F1F5F9;
+  --color-border: #CBD5E1;
+  --color-text: #0F172A;
+  --color-muted: #475569;
+}
+.theme-sage {
+  --color-canvas: #E3E8E3;
+  --color-entry: #EBE5E5;
+  --color-surface: #F0F4F0;
+  --color-border: #C8D4C8;
+  --color-text: #1A2E1A;
+  --color-muted: #4A6B4A;
+}
+.theme-midnight {
+  --color-canvas: #0F172A;
+  --color-entry: #1A1625;
+  --color-surface: #1E293B;
+  --color-border: #334155;
+  --color-text: #F8FAFC;
+  --color-muted: #94A3B8;
 }
 
 body {
   margin: 0;
   overscroll-behavior-y: none;
-  background-color: #F7F6F3;
-  color: #111111;
+  background-color: var(--color-canvas);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
 }
 
