@@ -81,6 +81,7 @@ export default function App() {
   const [currentTheme, setCurrentTheme] = useState('theme-bone');
   const [mode, setMode] = useState<'talk' | 'entry'>('talk');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   
   const [configs, setConfigs] = useState<WordConfig[]>([
     {
@@ -330,6 +331,21 @@ export default function App() {
     setConfigs(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 
+  const handleUpdateDictionaryWord = (configId: string, sequence: string, newWord: string) => {
+    setConfigs(prev => prev.map(c => {
+      if (c.id === configId) {
+        return {
+          ...c,
+          dictionary: {
+            ...c.dictionary,
+            [sequence]: newWord
+          }
+        };
+      }
+      return c;
+    }));
+  };
+
   return (
     <div className={`flex flex-col h-[100dvh] font-sans text-text overflow-hidden select-none transition-colors duration-500 ${currentTheme} ${mode === 'entry' ? 'bg-entry' : 'bg-canvas'}`}>
       
@@ -355,9 +371,9 @@ export default function App() {
             </div>
             
             <nav className="flex flex-col gap-2">
-              <button onClick={() => { setCurrentView('main'); setIsMenuOpen(false); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'main' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Talk / Entry</button>
-              <button onClick={() => { setCurrentView('configs'); setIsMenuOpen(false); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'configs' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Configurations</button>
-              <button onClick={() => { setCurrentView('settings'); setIsMenuOpen(false); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'settings' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Settings</button>
+              <button onClick={() => { setCurrentView('main'); setIsMenuOpen(false); setEditingConfigId(null); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'main' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Talk / Entry</button>
+              <button onClick={() => { setCurrentView('configs'); setIsMenuOpen(false); setEditingConfigId(null); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'configs' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Configurations</button>
+              <button onClick={() => { setCurrentView('settings'); setIsMenuOpen(false); setEditingConfigId(null); }} className={`text-left px-4 py-3 font-medium rounded-md transition-colors tracking-wide ${currentView === 'settings' ? 'bg-border/50 text-text' : 'text-muted hover:bg-border/30 hover:text-text'}`}>Settings</button>
               <button className="text-left px-4 py-3 text-muted font-medium hover:bg-border/30 hover:text-text rounded-md transition-colors tracking-wide">About</button>
             </nav>
           </div>
@@ -431,56 +447,113 @@ export default function App() {
         </div>
       ) : currentView === 'configs' ? (
         <div className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-2xl mx-auto w-full flex flex-col gap-5 hide-scrollbar pb-24">
-           {configs.map(config => (
-             <div key={config.id} className="bg-surface rounded-xl border border-border p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col gap-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 flex flex-col gap-1">
-                     <input 
-                       className="text-lg font-semibold text-text bg-transparent outline-none w-full placeholder:text-muted/40"
-                       value={config.title}
-                       onChange={e => handleUpdateConfig(config.id, { title: e.target.value })}
-                       placeholder="Configuration Title"
-                     />
-                     <input 
-                       className="text-sm text-muted bg-transparent outline-none w-full placeholder:text-muted/40"
-                       value={config.description}
-                       onChange={e => handleUpdateConfig(config.id, { description: e.target.value })}
-                       placeholder="Description..."
-                     />
-                  </div>
-                  <button 
-                    onClick={() => setActiveConfigId(config.id)}
-                    className={`w-12 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${activeConfigId === config.id ? 'bg-text' : 'bg-border'}`}
-                  >
-                    <div className={`w-5 h-5 bg-surface rounded-full shadow-sm absolute transition-transform duration-300 ${activeConfigId === config.id ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-                <div className="flex justify-end gap-2 pt-3 border-t border-[#F5F5F5]">
-                  <button 
-                    onClick={() => handleDuplicateConfig(config)}
-                    className="p-2 text-muted hover:text-text hover:bg-surface rounded-md transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                  {configs.length > 1 && (
-                    <button 
-                      onClick={() => handleDeleteConfig(config.id)}
-                      className="p-2 text-muted hover:text-[#9F2F2D] hover:bg-[#FDEBEC] rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-             </div>
-           ))}
-           <button 
-             onClick={handleAddConfig}
-             className="w-full py-5 mt-2 border-2 border-dashed border-[#D5D5D5] rounded-xl flex items-center justify-center gap-2 text-muted font-medium hover:bg-surface hover:border-border hover:shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:text-text transition-all active:scale-[0.98]"
-           >
-             <Plus className="w-5 h-5" />
-             Create New Configuration
-           </button>
-        </div>
+           {editingConfigId ? (() => {
+             const config = configs.find(c => c.id === editingConfigId);
+             if (!config) return null;
+             return (
+               <div className="flex flex-col gap-6 animate-in slide-in-from-right-4 duration-300">
+                 <div className="flex items-center gap-3">
+                   <button 
+                     onClick={() => setEditingConfigId(null)}
+                     className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface border border-transparent hover:border-border transition-colors text-muted hover:text-text"
+                   >
+                     <ArrowLeft className="w-5 h-5" />
+                   </button>
+                   <div className="flex flex-col">
+                     <h2 className="text-xl font-semibold text-text">{config.title}</h2>
+                     <span className="text-sm text-muted">Edit mapped sequences</span>
+                   </div>
+                 </div>
+                 
+                 <div className="flex flex-col gap-3">
+                   {Object.entries(config.dictionary).map(([sequence, word]) => {
+                     const dirs = sequence.split(',');
+                     return (
+                       <div key={sequence} className="flex items-center gap-4 bg-surface border border-border p-3 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+                         <div className="flex gap-1.5 p-1.5 bg-canvas rounded-md border border-border min-w-fit">
+                           {dirs.map((dir, i) => {
+                             const Icon = dir === 'UP' ? ArrowUp : dir === 'DOWN' ? ArrowDown : dir === 'LEFT' ? ArrowLeft : ArrowRight;
+                             return (
+                               <span key={i} className="p-1.5 rounded-sm bg-surface border border-border text-text">
+                                 <Icon size={16} strokeWidth={2.5} />
+                               </span>
+                             );
+                           })}
+                         </div>
+                         <input
+                           type="text"
+                           value={word}
+                           onChange={(e) => handleUpdateDictionaryWord(config.id, sequence, e.target.value)}
+                           className="flex-1 bg-transparent outline-none text-text font-medium placeholder:text-muted/40 px-2 text-lg"
+                           placeholder="Type word..."
+                         />
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+             );
+           })() : (
+             <>
+               {configs.map(config => (
+                 <div 
+                   key={config.id} 
+                   onClick={(e) => {
+                     if ((e.target as HTMLElement).closest('input') || (e.target as HTMLElement).closest('button')) return;
+                     setEditingConfigId(config.id);
+                   }}
+                   className="bg-surface rounded-xl border border-border p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col gap-4 cursor-pointer hover:border-[#D5D5D5] transition-colors"
+                 >
+                   <div className="flex items-start justify-between gap-4">
+                     <div className="flex-1 flex flex-col gap-1">
+                        <input 
+                          className="text-lg font-semibold text-text bg-transparent outline-none w-full placeholder:text-muted/40"
+                          value={config.title}
+                          onChange={e => handleUpdateConfig(config.id, { title: e.target.value })}
+                          placeholder="Configuration Title"
+                        />
+                        <input 
+                          className="text-sm text-muted bg-transparent outline-none w-full placeholder:text-muted/40"
+                          value={config.description}
+                          onChange={e => handleUpdateConfig(config.id, { description: e.target.value })}
+                          placeholder="Description..."
+                        />
+                     </div>
+                     <button 
+                       onClick={() => setActiveConfigId(config.id)}
+                       className={`w-12 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${activeConfigId === config.id ? 'bg-text' : 'bg-border'}`}
+                     >
+                       <div className={`w-5 h-5 bg-surface rounded-full shadow-sm absolute transition-transform duration-300 ${activeConfigId === config.id ? 'translate-x-6' : 'translate-x-1'}`} />
+                     </button>
+                   </div>
+                   <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                     <button 
+                       onClick={() => handleDuplicateConfig(config)}
+                       className="p-2 text-muted hover:text-text hover:bg-canvas rounded-md transition-colors"
+                     >
+                       <Copy className="w-4 h-4" />
+                     </button>
+                     {configs.length > 1 && (
+                       <button 
+                         onClick={() => handleDeleteConfig(config.id)}
+                         className="p-2 text-muted hover:text-[#9F2F2D] hover:bg-[#FDEBEC] rounded-md transition-colors"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     )}
+                   </div>
+                 </div>
+                 ))}
+                 <button 
+                   onClick={handleAddConfig}
+                   className="w-full py-5 mt-2 border-2 border-dashed border-[#D5D5D5] rounded-xl flex items-center justify-center gap-2 text-muted font-medium hover:bg-surface hover:border-border hover:shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:text-text transition-all active:scale-[0.98]"
+                 >
+                   <Plus className="w-5 h-5" />
+                   Create New Configuration
+                 </button>
+               </>
+             )}
+         </div>
       ) : (
         <>
           {/* Text Area */}
