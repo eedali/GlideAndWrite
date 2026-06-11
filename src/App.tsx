@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Menu, Delete, RotateCcw, Keyboard, Volume2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Trash2, Plus, Globe } from 'lucide-react';
+import { Menu, Delete, RotateCcw, Keyboard, Volume2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Trash2, Plus, Globe, Layers } from 'lucide-react';
 import { useTranslation } from './i18n';
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
@@ -10,6 +10,9 @@ interface WordConfig {
   description: string;
   language: string;
   dictionary: Record<string, string>;
+  dictionaryLayer2?: Record<string, string>;
+  dictionaryLayer3?: Record<string, string>;
+  dictionaryLayer4?: Record<string, string>;
 }
 
 interface PunctuationButtonProps {
@@ -78,7 +81,7 @@ const PunctuationButton: React.FC<PunctuationButtonProps> = ({ symbol, onAdd }) 
   );
 };
 
-const DEFAULT_QUICK_SYMBOLS = ['.', ',', '!', '?', "'", ':', ';', '+', '-', '=', '(', ')', '%'];
+const DEFAULT_QUICK_SYMBOLS = ['.', ',', '!', '?', "'", ':', ';', '+', '-', '=', '(', ')', '%', '/'];
 
 const DEFAULT_CONFIGS: WordConfig[] = [
   {
@@ -142,6 +145,29 @@ export default function App() {
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
+  const [activeLayer, setActiveLayer] = useState<number>(1);
+  const [editingLayer, setEditingLayer] = useState<number>(1);
+  const [layerCount, setLayerCount] = useState<number>(() => {
+    const saved = localStorage.getItem('gw_layerCount');
+    return saved ? Math.max(2, parseInt(saved, 10)) : 2;
+  });
+  const [layerToggleEnabled, setLayerToggleEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('gw_layerToggleEnabled');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [layerTogglePosition, setLayerTogglePosition] = useState<'left' | 'right'>(() => {
+    return (localStorage.getItem('gw_layerTogglePosition') as any) || 'right';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('gw_layerCount', layerCount.toString());
+  }, [layerCount]);
+  useEffect(() => {
+    localStorage.setItem('gw_layerToggleEnabled', layerToggleEnabled.toString());
+  }, [layerToggleEnabled]);
+  useEffect(() => {
+    localStorage.setItem('gw_layerTogglePosition', layerTogglePosition);
+  }, [layerTogglePosition]);
   
   const [configs, setConfigs] = useState<WordConfig[]>(() => {
     const saved = localStorage.getItem('gw_configs');
@@ -163,7 +189,10 @@ export default function App() {
   useEffect(() => {
     document.body.className = currentTheme;
   }, [currentTheme]);
-  const dictionary = activeConfig.dictionary;
+  const dictionary = activeLayer === 1 ? activeConfig.dictionary :
+                     activeLayer === 2 ? (activeConfig.dictionaryLayer2 || {}) :
+                     activeLayer === 3 ? (activeConfig.dictionaryLayer3 || {}) :
+                     (activeConfig.dictionaryLayer4 || {});
 
   const [currentSequenceState, setCurrentSequenceState] = useState<Direction[]>([]);
   const currentSequenceRef = useRef<Direction[]>([]);
@@ -177,7 +206,13 @@ export default function App() {
   const [quickSymbols, setQuickSymbols] = useState<string[]>(() => {
     const saved = localStorage.getItem('gw_quickSymbols');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error('Failed to parse quick symbols', e); }
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 13) {
+          return [...parsed, '/'];
+        }
+        return parsed;
+      } catch (e) { console.error('Failed to parse quick symbols', e); }
     }
     return DEFAULT_QUICK_SYMBOLS;
   });
@@ -204,14 +239,26 @@ export default function App() {
   useEffect(() => { localStorage.setItem('gw_quickSymbols', JSON.stringify(quickSymbols)); }, [quickSymbols]);
   
   const [isSaving, setIsSaving] = useState(false);
-  const [isManualInput, setIsManualInput] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const [isModalReady, setIsModalReady] = useState(false);
   const [newWord, setNewWord] = useState('');
+  
+  const [containerHeight, setContainerHeight] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (isTyping) {
+      setContainerHeight(`${window.innerHeight}px`);
+    } else {
+      const timer = setTimeout(() => setContainerHeight(undefined), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isTyping]);
   
   const [fontSizeLevel, setFontSizeLevel] = useState(1);
   const textAreaRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hiddenInputRef = useRef<HTMLTextAreaElement>(null);
 
   const currentSequenceKey = currentSequence.join(',');
   const previewWord = dictionary[currentSequenceKey] || 
@@ -380,22 +427,26 @@ export default function App() {
 
   const appendWord = (word: string) => {
     setConfirmedText(prev => {
-      if (word.startsWith('-') && word.length > 1 && prev.length > 0) {
-        const lastWord = prev[prev.length - 1];
+      let arr = [...prev];
+      if (arr.length > 0 && arr[arr.length - 1] === '') arr.pop();
+      if (word.startsWith('-') && word.length > 1 && arr.length > 0) {
+        const lastWord = arr[arr.length - 1];
         const suffix = word.slice(1);
-        return [...prev.slice(0, -1), lastWord + suffix];
+        return [...arr.slice(0, -1), lastWord + suffix];
       }
-      return [...prev, word];
+      return [...arr, word];
     });
   };
 
   const addSymbol = (symbol: string, withSpace: boolean) => {
     setConfirmedText(prev => {
+      let arr = [...prev];
       if (symbol.startsWith('-') && symbol.length > 1) {
-        if (prev.length > 0) {
-          const lastWord = prev[prev.length - 1];
+        if (arr.length > 0 && arr[arr.length - 1] === '') arr.pop();
+        if (arr.length > 0) {
+          const lastWord = arr[arr.length - 1];
           const suffix = symbol.slice(1);
-          return [...prev.slice(0, -1), lastWord + suffix];
+          return [...arr.slice(0, -1), lastWord + suffix];
         }
         return [symbol.slice(1)];
       }
@@ -403,13 +454,14 @@ export default function App() {
       const isAttachedPunctuation = /^[.,!?:;%)]$/.test(symbol);
       
       if (!withSpace && isAttachedPunctuation) {
-        if (prev.length === 0) return [symbol];
-        const newArr = [...prev];
-        newArr[newArr.length - 1] = newArr[newArr.length - 1] + symbol;
-        return newArr;
+        if (arr.length > 0 && arr[arr.length - 1] === '') arr.pop();
+        if (arr.length === 0) return [symbol];
+        arr[arr.length - 1] = arr[arr.length - 1] + symbol;
+        return arr;
       }
 
-      return [...prev, symbol];
+      if (arr.length > 0 && arr[arr.length - 1] === '') arr.pop();
+      return [...arr, symbol];
     });
   };
 
@@ -435,17 +487,24 @@ export default function App() {
       if (isSaving) {
         setConfigs(prev => prev.map(c => 
           c.id === activeConfigId 
-            ? { ...c, dictionary: { ...c.dictionary, [currentSequenceKey]: finalWord } }
+            ? { 
+                ...c, 
+                ...(activeLayer === 1 
+                  ? { dictionary: { ...c.dictionary, [currentSequenceKey]: finalWord } }
+                  : activeLayer === 2
+                  ? { dictionaryLayer2: { ...(c.dictionaryLayer2 || {}), [currentSequenceKey]: finalWord } }
+                  : activeLayer === 3
+                  ? { dictionaryLayer3: { ...(c.dictionaryLayer3 || {}), [currentSequenceKey]: finalWord } }
+                  : { dictionaryLayer4: { ...(c.dictionaryLayer4 || {}), [currentSequenceKey]: finalWord } }
+                )
+              }
             : c
         ));
         setCurrentSequence([]);
-      } else if (isManualInput) {
-        appendWord(finalWord);
       }
     }
     setNewWord('');
     setIsSaving(false);
-    setIsManualInput(false);
   };
 
   const speakText = (text: string) => {
@@ -483,14 +542,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isSaving || isManualInput) {
+    if (isSaving) {
       setIsModalReady(false);
       const timer = setTimeout(() => setIsModalReady(true), 400);
       return () => clearTimeout(timer);
     } else {
       setIsModalReady(false);
     }
-  }, [isSaving, isManualInput]);
+  }, [isSaving]);
 
   useLayoutEffect(() => {
     if (confirmedText.length < prevLengthRef.current) {
@@ -500,10 +559,10 @@ export default function App() {
   }, [confirmedText.length]);
 
   useLayoutEffect(() => {
-    if ((isSaving || isManualInput) && inputRef.current) {
+    if (isSaving && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isSaving, isManualInput]);
+  }, [isSaving]);
 
   useLayoutEffect(() => {
     if (!textAreaRef.current) return;
@@ -560,23 +619,28 @@ export default function App() {
     setConfigs(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 
-  const handleUpdateDictionaryWord = (configId: string, sequence: string, newWord: string) => {
+  const handleUpdateDictionaryWord = (configId: string, layer: number, sequence: string, newWord: string) => {
     setConfigs(prev => prev.map(c => {
       if (c.id === configId) {
-        return {
-          ...c,
-          dictionary: {
-            ...c.dictionary,
-            [sequence]: newWord
-          }
-        };
+        if (layer === 1) {
+          return { ...c, dictionary: { ...c.dictionary, [sequence]: newWord } };
+        } else if (layer === 2) {
+          return { ...c, dictionaryLayer2: { ...(c.dictionaryLayer2 || {}), [sequence]: newWord } };
+        } else if (layer === 3) {
+          return { ...c, dictionaryLayer3: { ...(c.dictionaryLayer3 || {}), [sequence]: newWord } };
+        } else {
+          return { ...c, dictionaryLayer4: { ...(c.dictionaryLayer4 || {}), [sequence]: newWord } };
+        }
       }
       return c;
     }));
   };
 
   return (
-    <div className={`flex flex-col h-[100dvh] font-sans text-text overflow-hidden select-none transition-colors duration-500 ${currentTheme} ${mode === 'entry' ? 'bg-entry' : 'bg-canvas'}`}>
+    <div 
+      className={`flex flex-col font-sans text-text overflow-hidden select-none transition-colors duration-500 ${currentTheme} ${mode === 'entry' ? 'bg-entry' : 'bg-canvas'}`}
+      style={{ height: containerHeight || '100dvh' }}
+    >
       
       {/* Sidebar Overlay */}
       {isMenuOpen && (
@@ -706,6 +770,59 @@ export default function App() {
               </div>
             </div>
 
+            {/* Layer Toggle Settings */}
+            <div className="flex flex-col gap-4 mt-6">
+              <h3 className="text-lg font-semibold tracking-tight text-text">Layer Toggle</h3>
+
+              {/* Layer Count Slider */}
+              <div className="flex items-center justify-between p-4 bg-surface rounded-xl border border-border">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-text">Number of Layers</span>
+                  <span className="text-[11px] text-muted">Up to 4 separate dictionaries</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setLayerCount(Math.max(2, layerCount - 1))}
+                    disabled={layerCount <= 2}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-canvas border border-border text-text disabled:opacity-50"
+                  >-</button>
+                  <span className="text-sm font-bold w-4 text-center">{layerCount}</span>
+                  <button 
+                    onClick={() => setLayerCount(Math.min(4, layerCount + 1))}
+                    disabled={layerCount >= 4}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-canvas border border-border text-text disabled:opacity-50"
+                  >+</button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-surface rounded-xl border border-border">
+                <span className="text-sm font-medium text-text">Show Layer Toggle</span>
+                <button
+                  onClick={() => setLayerToggleEnabled(!layerToggleEnabled)}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${layerToggleEnabled ? 'bg-text' : 'bg-border'}`}
+                >
+                  <div className={`w-5 h-5 bg-surface rounded-full shadow-sm absolute top-0.5 transition-transform duration-300 ${layerToggleEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              
+              {layerToggleEnabled && (
+                <div className="flex bg-surface border border-border rounded-lg p-1 shadow-sm">
+                  <button
+                    onClick={() => setLayerTogglePosition('left')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-md transition-all ${layerTogglePosition === 'left' ? 'bg-border text-text shadow-sm' : 'text-muted hover:text-text'}`}
+                  >
+                    Left Side
+                  </button>
+                  <button
+                    onClick={() => setLayerTogglePosition('right')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-md transition-all ${layerTogglePosition === 'right' ? 'bg-border text-text shadow-sm' : 'text-muted hover:text-text'}`}
+                  >
+                    Right Side
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col gap-4 mt-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold tracking-tight text-text">{t('settings.quickSymbols')}</h3>
@@ -747,8 +864,8 @@ export default function App() {
                      </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-6 gap-2">
-                  {quickSymbols.slice(7, 13).map((sym, i) => (
+                <div className="grid grid-cols-7 gap-2">
+                  {quickSymbols.slice(7, 14).map((sym, i) => (
                      <div key={i + 7} className={`aspect-square flex items-center justify-center rounded-md shadow-sm overflow-hidden ${isEditingSymbols ? 'bg-surface border-2 border-border focus-within:border-text' : 'bg-surface border border-border'}`}>
                        {isEditingSymbols ? (
                          <input
@@ -791,8 +908,31 @@ export default function App() {
                    </div>
                  </div>
                  
+                 {/* Configs Layer Toggle */}
+                 {layerCount > 1 && (
+                   <div className="flex bg-surface border border-border rounded-lg p-1 mx-auto w-full max-w-xs shadow-[0_2px_8px_rgba(0,0,0,0.02)] mb-4">
+                     {Array.from({ length: layerCount }).map((_, i) => {
+                       const layerNum = i + 1 as number;
+                       return (
+                         <button
+                           key={layerNum}
+                           onClick={() => setEditingLayer(layerNum)}
+                           className={`flex-1 py-2 text-xs font-semibold rounded-md transition-all ${editingLayer === layerNum ? 'bg-border text-text shadow-sm' : 'text-muted hover:text-text'}`}
+                         >
+                           Layer {layerNum}
+                         </button>
+                       );
+                     })}
+                   </div>
+                 )}
+                 
                  <div className="flex flex-col gap-3">
-                   {Object.entries(config.dictionary).map(([sequence, word]) => {
+                   {Object.entries(
+                     editingLayer === 1 ? config.dictionary :
+                     editingLayer === 2 ? (config.dictionaryLayer2 || {}) :
+                     editingLayer === 3 ? (config.dictionaryLayer3 || {}) :
+                     (config.dictionaryLayer4 || {})
+                   ).map(([sequence, word]) => {
                      const dirs = sequence.split(',');
                      return (
                        <div key={sequence} className="flex items-center gap-4 bg-surface border border-border p-3 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
@@ -809,7 +949,7 @@ export default function App() {
                          <input
                            type="text"
                            value={word}
-                           onChange={(e) => handleUpdateDictionaryWord(config.id, sequence, e.target.value)}
+                           onChange={(e) => handleUpdateDictionaryWord(config.id, editingLayer, sequence, e.target.value)}
                            className="flex-1 bg-transparent outline-none text-text font-medium placeholder:text-muted/40 px-2 text-lg"
                            placeholder={t('configs.typeWord')}
                          />
@@ -923,25 +1063,65 @@ export default function App() {
         <>
           {/* Text Area */}
       <div 
-        className="w-full max-w-4xl mx-auto h-[25vh] min-h-[140px] sm:h-[240px] shrink-0 relative"
+        className="w-full max-w-4xl mx-auto h-[25vh] min-h-[140px] sm:h-[240px] shrink-0 relative cursor-text group"
         style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 100%)', maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 100%)' }}
+        onPointerDown={(e) => {
+          if (isTyping) {
+            e.preventDefault();
+          }
+        }}
+        onClick={() => {
+          if (!isTyping) {
+            setIsTyping(true);
+            setTimeout(() => {
+              const el = hiddenInputRef.current;
+              if (el) {
+                el.focus();
+                el.setSelectionRange(el.value.length, el.value.length);
+              }
+            }, 10);
+          }
+        }}
       >
+        <textarea
+          ref={hiddenInputRef}
+          className="absolute inset-0 opacity-0 z-10 w-full h-full resize-none pointer-events-none"
+          value={confirmedText.join(' ')}
+          onChange={(e) => {
+            const val = e.target.value;
+            setConfirmedText(val === '' ? [] : val.split(' '));
+          }}
+          onBlur={() => setIsTyping(false)}
+          disabled={!isTyping}
+          autoCapitalize="none"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck="false"
+        />
         <div 
           ref={textAreaRef}
-          className="w-full h-full overflow-y-auto hide-scrollbar scroll-smooth"
+          className="w-full h-full overflow-y-auto hide-scrollbar scroll-smooth relative z-0"
         >
           <div className="flex flex-wrap justify-center content-center min-h-full gap-x-4 gap-y-3 p-4 sm:p-8 pb-12 sm:pb-16 text-center">
             {confirmedText.map((word, i) => (
-              <span key={i} className={`text-text ${fontClass} font-serif tracking-tight leading-[1.1] transition-all`}>
-                {word}
+              <span key={i} className={`text-text ${fontClass} font-serif tracking-tight leading-[1.1] transition-all relative`}>
+                {word === '' && i !== confirmedText.length - 1 ? '\u00A0' : word}
+                {isTyping && i === confirmedText.length - 1 && (
+                  <span className="absolute -right-[14px] top-0 bottom-0 flex items-center justify-center animate-pulse opacity-80">|</span>
+                )}
               </span>
             ))}
-            {mode === 'talk' && previewWord && (
+            {isTyping && confirmedText.length === 0 && (
+              <span className={`text-text ${fontClass} font-serif tracking-tight leading-[1.1] animate-pulse`}>
+                |
+              </span>
+            )}
+            {!isTyping && mode === 'talk' && previewWord && (
               <span className={`text-muted ${fontClass} font-serif tracking-tight leading-[1.1] opacity-60 transition-all`}>
                 {previewWord}
               </span>
             )}
-            {confirmedText.length === 0 && (!previewWord || mode === 'entry') && (
+            {!isTyping && confirmedText.length === 0 && (!previewWord || mode === 'entry') && (
               <span className={`text-muted ${fontClass} font-serif tracking-tight leading-[1.1] opacity-30 pointer-events-none transition-all`}>
                 {t('main.drafting')}
               </span>
@@ -954,7 +1134,38 @@ export default function App() {
       <div className="flex-1 flex flex-col relative w-full items-center justify-center max-w-lg mx-auto min-h-0">
         
         {/* Swipe Area */}
-        <div className="flex-1 min-h-0 w-full relative p-2 sm:p-8 flex items-center justify-center">
+        <div className="flex-1 min-h-0 w-full relative p-2 sm:p-8 flex items-center justify-center gap-4 sm:gap-6">
+          {layerToggleEnabled && layerTogglePosition === 'left' && layerCount > 1 && (
+            layerCount === 2 ? (
+              <button 
+                onClick={() => setActiveLayer(prev => prev === 1 ? 2 : 1)}
+                className={`flex flex-col items-center justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.02)] h-24 w-12 shrink-0 transition-all active:scale-[0.95] ${
+                  activeLayer === 1 ? 'bg-text text-surface border border-transparent' : 'bg-surface text-text border-2 border-text'
+                }`}
+              >
+                <span className="text-[12px] font-bold tracking-wider">L{activeLayer}</span>
+              </button>
+            ) : (
+              <div className="flex flex-col items-center justify-between py-2 gap-1.5 bg-surface border border-border rounded-full p-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] shrink-0 w-12 h-full max-h-[320px]">
+                {Array.from({ length: layerCount }).map((_, i) => {
+                  const layerNum = i + 1 as number;
+                  return (
+                    <button
+                      key={layerNum}
+                      onClick={() => setActiveLayer(layerNum)}
+                      className={`w-full flex-1 flex items-center justify-center rounded-full transition-all active:scale-[0.95] ${
+                        activeLayer === layerNum 
+                          ? 'bg-text text-surface shadow-md' 
+                          : 'bg-transparent text-muted hover:bg-canvas hover:text-text'
+                      }`}
+                    >
+                      <span className="text-[11px] font-bold tracking-wider">L{layerNum}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          )}
           <div className="relative w-full h-full max-w-[320px] max-h-[320px] flex items-center justify-center">
             {/* Sequence Status Indicator */}
             {currentSequence.length > 0 && (
@@ -1030,16 +1241,47 @@ export default function App() {
             </svg>
           </div>
         </div>
+        {layerToggleEnabled && layerTogglePosition === 'right' && layerCount > 1 && (
+          layerCount === 2 ? (
+            <button 
+              onClick={() => setActiveLayer(prev => prev === 1 ? 2 : 1)}
+              className={`flex flex-col items-center justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.02)] h-24 w-12 shrink-0 transition-all active:scale-[0.95] ${
+                activeLayer === 1 ? 'bg-text text-surface border border-transparent' : 'bg-surface text-text border-2 border-text'
+              }`}
+            >
+              <span className="text-[12px] font-bold tracking-wider">L{activeLayer}</span>
+            </button>
+          ) : (
+            <div className="flex flex-col items-center justify-between py-2 gap-1.5 bg-surface border border-border rounded-full p-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] shrink-0 w-12 h-full max-h-[320px]">
+              {Array.from({ length: layerCount }).map((_, i) => {
+                const layerNum = i + 1 as number;
+                return (
+                  <button
+                    key={layerNum}
+                    onClick={() => setActiveLayer(layerNum)}
+                    className={`w-full flex-1 flex items-center justify-center rounded-full transition-all active:scale-[0.95] ${
+                      activeLayer === layerNum 
+                        ? 'bg-text text-surface shadow-md' 
+                        : 'bg-transparent text-muted hover:bg-canvas hover:text-text'
+                    }`}
+                  >
+                    <span className="text-[11px] font-bold tracking-wider">L{layerNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        )}
       </div>
-        {/* Punctuation Grid */}
-        <div className="w-[calc(100%-2rem)] sm:w-[calc(100%-5rem)] mx-auto shrink-0 flex flex-col gap-1.5 mt-1 mb-1 sm:mb-2">
+      {/* Punctuation Grid */}
+      <div className="w-[calc(100%-2rem)] sm:w-[calc(100%-5rem)] mx-auto shrink-0 flex flex-col gap-1.5 mt-1 mb-1 sm:mb-2">
           <div className="flex w-full gap-1.5 justify-between">
             {quickSymbols.slice(0, 7).map(sym => (
               <PunctuationButton key={sym} symbol={sym} onAdd={addSymbol} />
             ))}
           </div>
-          <div className="flex w-full gap-1.5 justify-between px-[3%]">
-            {quickSymbols.slice(7, 13).map(sym => (
+          <div className="flex w-full gap-1.5 justify-between">
+            {quickSymbols.slice(7, 14).map(sym => (
               <PunctuationButton key={sym} symbol={sym} onAdd={addSymbol} />
             ))}
           </div>
@@ -1059,7 +1301,23 @@ export default function App() {
             <RotateCcw className="w-5 h-5 mb-2" strokeWidth={2} />
             <span className="text-[10px] font-bold tracking-[0.05em] uppercase">{t('bottomBar.undo')}</span>
           </button>
-          <button onClick={() => setIsManualInput(true)} className="flex flex-col items-center justify-center p-4 text-muted hover:text-text hover:bg-surface border border-transparent hover:border-border transition-all rounded-lg active:scale-[0.95]">
+          <button 
+            onClick={() => {
+              if (isTyping) {
+                hiddenInputRef.current?.blur();
+              } else {
+                setIsTyping(true);
+                setTimeout(() => {
+                  const el = hiddenInputRef.current;
+                  if (el) {
+                    el.focus();
+                    el.setSelectionRange(el.value.length, el.value.length);
+                  }
+                }, 10);
+              }
+            }} 
+            className="flex flex-col items-center justify-center p-4 text-muted hover:text-text bg-surface border border-border shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all rounded-lg active:scale-[0.95]"
+          >
             <Keyboard className="w-5 h-5 mb-2" strokeWidth={2} />
             <span className="text-[10px] font-bold tracking-[0.05em] uppercase">{t('bottomBar.type')}</span>
           </button>
@@ -1070,22 +1328,21 @@ export default function App() {
         </div>
       )}
 
-      {/* Save Word / Keyboard Modal Overlay */}
-      {(isSaving || isManualInput) && (
+      {/* Save Word Modal Overlay */}
+      {isSaving && (
         <div 
           className="fixed inset-0 z-[200] bg-text/10 flex items-center justify-center p-4 backdrop-blur-sm"
           style={{ pointerEvents: isModalReady ? 'auto' : 'none' }}
           onPointerDown={(e) => {
             if (e.target === e.currentTarget) {
               setIsSaving(false);
-              setIsManualInput(false);
               setNewWord('');
             }
           }}
         >
           <div className="bg-surface border border-border rounded-xl p-8 w-full max-w-[360px] shadow-[0_8px_40px_rgba(0,0,0,0.06)] transform transition-transform animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-xl font-sans font-medium tracking-tight mb-6 text-text">
-              {isSaving ? t('modal.mapAction') : t('modal.enterWord')}
+              {t('modal.mapAction')}
             </h3>
             
             {isSaving && currentSequence.length > 0 && (
@@ -1104,6 +1361,7 @@ export default function App() {
             <input 
               type="text" 
               ref={inputRef}
+              autoCapitalize="none"
               className="w-full bg-canvas border border-border rounded-md outline-none py-3 px-4 mb-8 text-base font-medium text-text placeholder:text-muted focus:border-text focus:bg-surface transition-colors"
               value={newWord}
               onChange={e => setNewWord(e.target.value)}
@@ -1118,7 +1376,6 @@ export default function App() {
                 className="px-5 py-2.5 text-muted text-sm font-medium hover:text-text transition-colors"
                 onClick={() => {
                   setIsSaving(false);
-                  setIsManualInput(false);
                   setNewWord('');
                   setCurrentSequence([]);
                 }}
