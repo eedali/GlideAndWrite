@@ -1,4 +1,6 @@
-# 👆 Glide & Write
+<img src="./assets/GW_logo_2.png" width="120" alt="Glide & Write Logo" />
+
+# Glide & Write
 
 Glide & Write is an intuitive, accessible, gesture-based communication application specifically designed for non-verbal individuals or those with speech impairments. By utilizing simple directional swipes or continuous screen glides, users can rapidly construct sentences and communicate their thoughts aloud using built-in text-to-speech.
 
@@ -75,7 +77,7 @@ Each configuration stores its own set of words, layer combinations, and target s
 
 ### 🛠 Settings
 
-<img src="./assets/screenshots/Settings.png" width="300" alt="Settings Screen" />
+<img src="./assets/screenshots/Settings-2.png" width="300" alt="Settings Screen" />
 
 The **Settings** menu gives you full control over the application's behavior and appearance:
 
